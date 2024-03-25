@@ -1,0 +1,1 @@
+pyinstaller generate_gst_remarks.py  --onefile --windowed
