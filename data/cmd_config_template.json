@@ -1,4 +1,6 @@
 {
+    "gov": "data/GSTR-2A Apr23 to Dec23 Govnment data.csv",
+    "user": "data/ITC from Apr23 to Dec23_user.csv",
     "gov_columns": {
         "gstin": "GSTIN",
         "invoice_no": "Invoice No",
@@ -13,5 +15,6 @@
         "cgst": "Central Tax(₹)",
         "sgst": "State/UT Tax(₹)"
     },
+    "output_path":"/workspaces/gst_remarks/",
     "output_prefix":"firm"
 }

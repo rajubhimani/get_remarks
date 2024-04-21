@@ -41,13 +41,11 @@ async def get_gst_remarks(
         _type_: _description_
     """
     config_dict = json.load(config_file.file)
-    output_path = config_dict["output_path"]
     output_prefix = config_dict["output_prefix"]
     gov_data = pd.read_csv(gov_file.file, dtype=str)
     user_data = pd.read_csv(client_file.file, dtype=str)
     logger.debug(gov_data.columns)
     logger.debug(user_data.columns)
-    output_path = PurePath(output_path)
 
     def remove_comma(value: str):
         """_summary_
