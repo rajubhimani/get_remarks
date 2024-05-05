@@ -3,16 +3,18 @@
 import warnings
 import logging
 import json
-from pathlib import PurePath
+from typing import List
 from io import StringIO, BytesIO
 from zipfile import ZipFile, ZIP_DEFLATED, ZipInfo
 from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.responses import Response
 import pandas as pd
+
 warnings.filterwarnings("ignore")
 app = FastAPI()
 # get root logger
 logger = logging.getLogger(__name__)
+
 
 @app.get("/")
 async def root() -> dict:
@@ -24,7 +26,7 @@ async def root() -> dict:
     return {"message": "Hello World"}
 
 
-@app.post("/get_gst_remarks/", response_description='zip')
+@app.post("/get_gst_remarks/", response_description="zip")
 async def get_gst_remarks(
     gov_file: UploadFile,
     client_file: UploadFile,
@@ -40,14 +42,14 @@ async def get_gst_remarks(
     Returns:
         _type_: _description_
     """
-    config_dict = json.load(config_file.file)
-    output_prefix = config_dict["output_prefix"]
-    gov_data = pd.read_csv(gov_file.file, dtype=str)
-    user_data = pd.read_csv(client_file.file, dtype=str)
+    config_dict: dict = json.load(config_file.file)
+    output_prefix: str = config_dict["output_prefix"]
+    gov_data: pd.DataFrame = pd.read_csv(gov_file.file, dtype=str)
+    user_data: pd.DataFrame = pd.read_csv(client_file.file, dtype=str)
     logger.debug(gov_data.columns)
     logger.debug(user_data.columns)
 
-    def remove_comma(value: str):
+    def remove_comma(value: str) -> str:
         """_summary_
 
         Args:
@@ -60,8 +62,8 @@ async def get_gst_remarks(
             return value
         return value.replace(",", "")
 
-    tax_columns = ["igst", "cgst", "sgst"]
-    match_columns = ["gstin", "invoice_no"]
+    tax_columns: List[str] = ["igst", "cgst", "sgst"]
+    match_columns: List[str] = ["gstin", "invoice_no"]
     all_columns = []
     left_join_column = []
     right_join_column = []
@@ -69,29 +71,29 @@ async def get_gst_remarks(
     right_value_column = []
 
     for column in match_columns:
-        gov_column = config_dict["gov_columns"][column]
-        ren_col = "gov_" + column
+        gov_column: str = config_dict["gov_columns"][column]
+        ren_col: str = "gov_" + column
         gov_data[ren_col] = gov_data[gov_column]
         gov_data.drop(columns=[gov_column])
         left_join_column.append(ren_col)
         all_columns.append(ren_col)
-        user_column = config_dict["user_columns"][column]
-        ren_col = "user_" + column
+        user_column: str = config_dict["user_columns"][column]
+        ren_col: str = "user_" + column
         user_data[ren_col] = user_data[user_column]
         user_data.drop(columns=[user_column])
         right_join_column.append(ren_col)
         all_columns.append(ren_col)
     for column in tax_columns:
-        gov_column = config_dict["gov_columns"][column]
-        ren_col = "gov_" + column
+        gov_column: str = config_dict["gov_columns"][column]
+        ren_col: str = "gov_" + column
         gov_data[ren_col] = gov_data[gov_column]
         gov_data.drop(columns=[gov_column])
         gov_data[ren_col] = gov_data[ren_col].map(remove_comma)
         gov_data[ren_col] = gov_data[ren_col].astype(float)
         all_columns.append(ren_col)
         left_value_column.append(ren_col)
-        user_column = config_dict["user_columns"][column]
-        ren_col = "user_" + column
+        user_column: str = config_dict["user_columns"][column]
+        ren_col: str = "user_" + column
         user_data[ren_col] = user_data[user_column]
         user_data.drop(columns=[user_column])
         user_data[ren_col] = user_data[ren_col].map(remove_comma)
@@ -99,7 +101,7 @@ async def get_gst_remarks(
         all_columns.append(ren_col)
         right_value_column.append(ren_col)
 
-    def apply_remarks(row):
+    def apply_remarks(row: pd.Series):
         """_summary_
 
         Args:
@@ -109,7 +111,7 @@ async def get_gst_remarks(
         Returns:
             _type_: _description_
         """
-        remark_list = []
+        remark_list: List = []
         remarks = [
             (
                 "igst",
@@ -168,7 +170,7 @@ async def get_gst_remarks(
         left_join_column,
         right_join_column,
     )
-    comb_data = pd.merge(
+    comb_data: pd.DataFrame = pd.merge(
         gov_data,
         user_data,
         # on=match_columns,
@@ -180,10 +182,10 @@ async def get_gst_remarks(
     logger.debug(
         "comb_data.columns - %s, comb_data.shape %s", comb_data.columns, comb_data.shape
     )
-    
+
     zip_buffer = BytesIO()
     try:
-        with ZipFile(zip_buffer, 'w', ZIP_DEFLATED) as zip_file:
+        with ZipFile(zip_buffer, "w", ZIP_DEFLATED) as zip_file:
             match_filter = comb_data["_merge"] == "both"
             match_data = comb_data.loc[match_filter, :]
             logger.debug("%s %s", match_data.columns, match_data.shape)
@@ -203,7 +205,9 @@ async def get_gst_remarks(
             remain_data = comb_data.loc[remain_filter, :]
             remain_gov_data = remain_data.loc[:, left_join_column + left_value_column]
             remain_gov_data = remain_gov_data.dropna(how="all", axis="index")
-            remain_user_data = remain_data.loc[:, right_join_column + right_value_column]
+            remain_user_data = remain_data.loc[
+                :, right_join_column + right_value_column
+            ]
             remain_user_data = remain_user_data.dropna(how="all", axis="index")
             gstin_data = pd.merge(
                 remain_gov_data,
@@ -224,7 +228,9 @@ async def get_gst_remarks(
             gstin_match_data[all_columns + ["remarks"]].to_csv(gstin_s_io, index=False)
             zip_file.writestr(gstin_zip_info, gstin_s_io.getvalue())
 
-            invoice_gov_data = gstin_not_match_data.loc[:, left_join_column + left_value_column]
+            invoice_gov_data = gstin_not_match_data.loc[
+                :, left_join_column + left_value_column
+            ]
             invoice_gov_data = invoice_gov_data.dropna(how="all", axis="index")
             invoice_user_data = gstin_not_match_data.loc[
                 :, right_join_column + right_value_column
@@ -247,14 +253,19 @@ async def get_gst_remarks(
             invoice_data[all_columns + ["remarks"]].to_csv(invoice_s_io, index=False)
             zip_file.writestr(invoice_zip_info, invoice_s_io.getvalue())
         zip_buffer.seek(0)
-        headers: dict[str, str] = {"Content-Disposition": "attachment; filename=gst_remarks.zip"}
+        headers: dict[str, str] = {
+            "Content-Disposition": "attachment; filename=gst_remarks.zip"
+        }
         return Response(
             zip_buffer.getvalue(),
             status_code=200,
             headers=headers,
-            media_type="application/zip")
+            media_type="application/zip",
+        )
     except Exception as error:
         logger.error(error)
-        raise HTTPException(detail='There was an error processing the data', status_code=400) from error
+        raise HTTPException(
+            detail="There was an error processing the data", status_code=400
+        ) from error
     finally:
         zip_buffer.close()
